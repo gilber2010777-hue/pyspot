@@ -13,50 +13,83 @@ const btn8d = document.getElementById('btn8d');
 const btnTremolo = document.getElementById('btnTremolo');
 const btnSurround = document.getElementById('btnSurround');
 const trackTitle = document.getElementById('trackTitle');
+const trackCount = document.getElementById('trackCount');
 const progress = document.getElementById('progress');
 const currTimeEl = document.getElementById('currTime');
 const totalTimeEl = document.getElementById('totalTime');
 const fileInput = document.getElementById('audioFiles');
+const playlistTracksContainer = document.getElementById('playlistTracks');
 
-// Inicializa o Contexto de Áudio Web (Segurança dos navegadores exige clique do usuário)
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         audioSource = audioCtx.createMediaElementSource(audioEl);
-        
-        // Nó do Panner Estéreo (Controla Esquerda/Direita para o 8D)
         pannerNode = audioCtx.createStereoPanner();
-        // Nó de Ganho (Volume dinâmico para o Tremolo)
         gainNode = audioCtx.createGain();
 
-        // Conexões: Fonte -> Efeito Espacial -> Efeito Volume -> Saída do Celular
         audioSource.connect(pannerNode);
         pannerNode.connect(gainNode);
         gainNode.connect(audioCtx.destination);
     }
 }
 
-// Carregar fila de músicas do aparelho
+// Carregar arquivos e montar a lista visual
 fileInput.addEventListener('change', (e) => {
     initAudio();
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
     playlist = files.map(file => ({
-        name: file.name.replace(/\.[^/.]+$/, ""), // Remove a extensão (.mp3, etc)
+        name: file.name.replace(/\.[^/.]+$/, ""),
         url: URL.createObjectURL(file)
     }));
 
+    trackCount.innerText = `${playlist.length} músicas adicionadas`;
+    renderPlaylist();
+    
     currentIndex = 0;
     loadTrack(currentIndex);
     playTrack();
 });
+
+// Renderiza a lista de músicas na tela igual ao app Desktop
+function renderPlaylist() {
+    playlistTracksContainer.innerHTML = '';
+    playlist.forEach((track, index) => {
+        const item = document.createElement('div');
+        item.className = `track-item ${index === currentIndex ? 'playing' : ''}`;
+        item.innerHTML = `
+            <div class="track-item-index">${index + 1}</div>
+            <div class="track-item-name">${track.name}</div>
+        `;
+        
+        // Se clicar na música da lista, ela toca direto!
+        item.addEventListener('click', () => {
+            currentIndex = index;
+            loadTrack(currentIndex);
+            playTrack();
+        });
+        
+        playlistTracksContainer.appendChild(item);
+    });
+}
 
 function loadTrack(index) {
     if (!playlist[index]) return;
     audioEl.src = playlist[index].url;
     trackTitle.innerText = playlist[index].name;
     progress.value = 0;
+    
+    // Atualiza qual música está marcada como "tocando agora" na lista
+    const items = document.querySelectorAll('.track-item');
+    items.forEach((item, idx) => {
+        if (idx === index) {
+            item.classList.add('playing');
+            item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            item.classList.remove('playing');
+        }
+    });
 }
 
 function playTrack() {
@@ -73,7 +106,6 @@ function pauseTrack() {
     isPlaying = false;
 }
 
-// Controles Globais
 btnPlay.addEventListener('click', () => {
     if (isPlaying) { pauseTrack(); } else { playTrack(); }
 });
@@ -92,7 +124,7 @@ document.getElementById('btnPrev').addEventListener('click', () => {
     playTrack();
 });
 
-// Alternadores de Efeitos (Ativa/Desativa)
+// Efeitos
 btn8d.addEventListener('click', () => {
     is8D = !is8D;
     btn8d.classList.toggle('active', is8D);
@@ -113,12 +145,10 @@ btnSurround.addEventListener('click', () => {
     btnSurround.innerText = isSurround ? "📻 Surround: Ativo" : "📻 Surround: Off";
 });
 
-// Atualização de Linha do Tempo / Seek
 audioEl.addEventListener('timeupdate', () => {
     if (isNaN(audioEl.duration)) return;
     progress.max = audioEl.duration;
     progress.value = audioEl.currentTime;
-    
     currTimeEl.innerText = formatTime(audioEl.currentTime);
     totalTimeEl.innerText = formatTime(audioEl.duration);
 });
@@ -137,30 +167,20 @@ function formatTime(secs) {
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
 }
 
-// LOOP DO PROCESSADOR DE ÁUDIO (Mapeado direto do seu script Python)
-// Roda a cada 30ms garantindo transições perfeitamente fluidas e sem ruídos
+// Loop do processador
 setInterval(() => {
     if (!isPlaying || !audioCtx) return;
-
     let now = audioCtx.currentTime;
 
-    // 1. Processamento do Efeito 8D (Rotação 360 Graus suave)
     if (is8D && pannerNode) {
         angle8d += 0.04;
-        let panValue = Math.sin(angle8d); // Oscila entre -1 (Esquerda) e 1 (Direita)
-        pannerNode.pan.setValueAtTime(panValue, now);
+        pannerNode.pan.setValueAtTime(Math.sin(angle8d), now);
     }
-
-    // 2. Processamento do Efeito Tremolo (Modulação senoidal de Volume)
     if (isTremolo && gainNode) {
-        // Oscilação rápida e sutil de volume imitando caixas de som clássicas
         let modVol = 0.85 + 0.15 * Math.sin(audioEl.currentTime * 2 * Math.PI * 4.0);
         gainNode.gain.setValueAtTime(modVol, now);
     }
-
-    // 3. Processamento do Efeito Surround (Simulação de Fase/Eco leve)
     if (isSurround && pannerNode && is8D === false) {
-        // Adiciona um balanço tridimensional estático expandindo o palco sonoro
         let surroundValue = 0.3 * Math.cos(audioEl.currentTime * 1.5);
         pannerNode.pan.setValueAtTime(surroundValue, now);
     }
