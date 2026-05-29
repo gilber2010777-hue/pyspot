@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PySpotify Mobile</title>
+    <link rel="manifest" href="data:application/json,{%22name%22:%22PySpotify%20Mobile%22,%22short_name%22:%22PySpotify%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22#121212%22,%22theme_color%22:%22#1DB954%22}">
+    <style>
+        :root {
+            --accent: #1DB954;
+            --bg: #121212;
+            --surface: #181818;
+        }
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg);
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; flex-direction: column; height: 100vh;
+        }
+        header {
+            padding: 20px; text-align: center;
+            font-size: 24px; font-weight: bold; color: var(--accent);
+        }
+        .container {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .cover-art {
+            width: 260px; height: 260px;
+            background: linear-gradient(135deg, #282828, #181818);
+            border-radius: 15px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 64px; margin-bottom: 25px;
+        }
+        .track-info { text-align: center; margin-bottom: 25px; width: 100%; }
+        .title { font-size: 20px; font-weight: bold; margin-bottom: 5px; }
+        .artist { font-size: 14px; color: #b3b3b3; }
+        
+        /* Controles de Efeitos */
+        .effects-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 10px; width: 100%; max-width: 320px; margin-bottom: 25px;
+        }
+        .btn-fx {
+            background: #242424; border: none; color: white;
+            padding: 10px; border-radius: 20px; font-size: 11px;
+            font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        .btn-fx.active { background: var(--accent); color: black; }
+
+        /* Timeline */
+        .timeline-container { width: 100%; max-width: 320px; margin-bottom: 25px; }
+        .slider {
+            width: 100%; -webkit-appearance: none; appearance: none;
+            height: 4px; border-radius: 2px; background: #535353; outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 12px; height: 12px;
+            border-radius: 50%; background: var(--accent); cursor: pointer;
+        }
+        .time-labels { display: flex; justify-content: space-between; font-size: 12px; color: #b3b3b3; margin-top: 5px; }
+
+        /* Botões Principais */
+        .main-controls { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; }
+        .btn-round {
+            background: transparent; border: none; color: white; font-size: 28px; cursor: pointer;
+        }
+        .btn-play {
+            background: white; color: black; width: 60px; height: 60px;
+            border-radius: 50%; font-size: 24px; display: flex; align-items: center; justify-content: center;
+        }
+
+        /* Input de Arquivo Customizado */
+        .file-label {
+            background: #242424; color: white; padding: 12px 24px;
+            border-radius: 25px; font-weight: bold; font-size: 14px;
+            cursor: pointer; display: inline-block; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+    <header>PySpotify Pro</header>
+
+    <div class="container">
+        <div class="cover-art" id="cover">🎵</div>
+        
+        <div class="track-info">
+            <div class="title" id="trackTitle">Nenhuma música</div>
+            <div class="artist">Armazenamento Local</div>
+        </div>
+
+        <div class="effects-grid">
+            <button class="btn-fx" id="btn8d">🎧 8D: Off</button>
+            <button class="btn-fx" id="btnTremolo">🌊 Tremolo: Off</button>
+            <button class="btn-fx" id="btnSurround">📻 Surround: Off</button>
+        </div>
+
+        <div class="timeline-container">
+            <input type="range" class="slider" id="progress" value="0" min="0" max="100">
+            <div class="time-labels">
+                <span id="currTime">0:00</span>
+                <span id="totalTime">0:00</span>
+            </div>
+        </div>
+
+        <div class="main-controls">
+            <button class="btn-round" id="btnPrev">⏮</button>
+            <button class="btn-round btn-play" id="btnPlay">▶</button>
+            <button class="btn-round" id="btnNext">⏭</button>
+        </div>
+
+        <label class="file-label" for="audioFiles">📂 Carregar Músicas do Celular</label>
+        <input type="file" id="audioFiles" accept="audio/*" multiple>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Registra o Service Worker para habilitar o modo offline
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
