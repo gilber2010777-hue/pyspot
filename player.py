@@ -13,11 +13,11 @@ import pygame
 from tkinter import filedialog, colorchooser
 from PIL import Image, ImageDraw, ImageFilter
 
-# --- CORREÇÃO: Oculta a janela do console nativamente para não quebrar os atalhos de teclado ---
+
 try:
     hwnd_console = ctypes.windll.kernel32.GetConsoleWindow()
     if hwnd_console:
-        ctypes.windll.user32.ShowWindow(hwnd_console, 0) # 0 = SW_HIDE (Esconde o CMD instantaneamente)
+        ctypes.windll.user32.ShowWindow(hwnd_console, 0) 
 except Exception:
     pass
 
@@ -41,17 +41,17 @@ class PySpotifyApp(ctk.CTk):
         self.minsize(1000, 650)
         self.resizable(True, True)
 
-        # Força a renderização inicial e captura o HWND real do topo da janela através do Root Ancestor do Windows
+       
         self.update()
         try:
-            self.hwnd = ctypes.windll.user32.GetAncestor(self.winfo_id(), 2) # GA_ROOT robusto
+            self.hwnd = ctypes.windll.user32.GetAncestor(self.winfo_id(), 2)
         except Exception:
             try:
                 self.hwnd = int(self.wm_frame(), 16)
             except Exception:
                 self.hwnd = None
 
-        # CORREÇÃO DE ÁUDIO: Frequência ajustada e buffer otimizado para eliminar chiados/ruídos de resampling
+     
         pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
         pygame.mixer.init()
         self.channel = pygame.mixer.Channel(0) 
@@ -63,10 +63,10 @@ class PySpotifyApp(ctk.CTk):
             
         self.metadata = self.load_metadata()
 
-        # Ícone profissional da janela / barra de tarefas
+        
         self._ensure_app_icon()
 
-        # Estados de controle
+        
         self.current_track = None
         self.is_paused = False
         self.previous_files = []
@@ -76,30 +76,29 @@ class PySpotifyApp(ctk.CTk):
         self.repeat_mode = 0 
         self.repeat_labels = ["🔁 Off", "🔂 Música", "🔁 Todas"]
         
-        # Cor de destaque padrão (Modificada dinamicamente ao tocar músicas)
+       
         self.current_accent_color = "#1DB954"
         
-        # Controle de Interatividade do Seeker
+        
         self.is_seeking = False
         
-        # Estados de processing avançado de som
         self.is_8d_enabled = False
         self.is_surround_enabled = False
         self.audio_angle = 0.0
         
-        # Referência de cache para o fundo dinâmico
+        
         self.current_pil_blur = None
 
-        # --- MONITORAMENTO DE BLUETOOTH ---
+        
         self.bt_connected = False
         self.bt_thread = threading.Thread(target=self._monitor_bluetooth, daemon=True)
         self.bt_thread.start()
 
-        # --- ESTRUTURA DE LAYOUT ---
+       
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # 1. Barra Lateral Esquerda
+        
         self.sidebar = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color="#000000")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         self.sidebar.pack_propagate(False)
@@ -127,7 +126,7 @@ class PySpotifyApp(ctk.CTk):
         self.sidebar_footer = ctk.CTkLabel(self.sidebar, text="Grazueiro Aura 67 • v3.0", text_color="#3d3d3d", font=ctk.CTkFont(size=10))
         self.sidebar_footer.pack(side="bottom", pady=16)
 
-        # 2. Container Central
+        
         self.content_container = ctk.CTkFrame(self, fg_color="#121212", corner_radius=0)
         self.content_container.grid(row=0, column=1, sticky="nsew")
         
@@ -136,10 +135,10 @@ class PySpotifyApp(ctk.CTk):
 
         self.show_library_view()
 
-        # Ajuste dinâmico do borrão
+        
         self.player_frame.bind("<Configure>", self.on_player_resize)
 
-        # --- CONFIGURAÇÃO DE ATALHOS MODIFICADA ---
+       
         if KEYBOARD_AVAILABLE:
             try:
                 keyboard.add_hotkey('ctrl+shift', lambda: self.after(0, self.pause_resume))
@@ -177,7 +176,7 @@ class PySpotifyApp(ctk.CTk):
 
     def apply_button_effects(self, btn):
         """Aplica animação suave de subir no hover e pressionar no clique (mantendo layout estável)."""
-        # Captura os valores de pady reais no momento em que o efeito é atribuído ao botão
+        
         try:
             info = btn.pack_info()
             py = info.get("pady", 0)
@@ -303,14 +302,14 @@ class PySpotifyApp(ctk.CTk):
             time.sleep(2)
             currently_connected, dev_name, dev_batt = self._check_bluetooth_connected()
             
-            # Se estava conectado e desconectou/acabou a bateria durante a reprodução
+           
             if self.bt_connected and not currently_connected:
                 if self.channel.get_busy() and not self.is_paused:
                     self.after(0, self.pause_resume)
 
             self.bt_connected = currently_connected
             
-            # Atualiza o indicador de status na interface
+            
             if currently_connected:
                 batt_info = f" ({dev_batt})" if dev_batt else ""
                 status_text = f"🎧 Bluetooth: {dev_name}{batt_info}"
@@ -354,7 +353,7 @@ class PySpotifyApp(ctk.CTk):
     def setup_library_view(self):
         self.library_frame = ctk.CTkFrame(self.content_container, fg_color="transparent")
         
-        # --- INDICADOR BLUETOOTH (Posicionado em cima da barra de pesquisa) ---
+       
         self.lbl_bt_status = ctk.CTkLabel(
             self.library_frame, 
             text="🎧 Bluetooth: Verificando...", 
@@ -388,16 +387,15 @@ class PySpotifyApp(ctk.CTk):
 
     def setup_player_view(self):
         self.player_frame = ctk.CTkFrame(self.content_container, fg_color="#121212", corner_radius=0)
-        
-        # Camada de fundo (Borrão Estilo Spotify/Vignette)
+
         self.bg_blur_label = ctk.CTkLabel(self.player_frame, text="")
         self.bg_blur_label.place(x=0, y=0, relwidth=1, relheight=1)
 
-        # HUD Principal
+        
         self.center_hud = ctk.CTkFrame(self.player_frame, fg_color="transparent")
         self.center_hud.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        # Ferramentas Superiores
+      
         self.custom_tools_frame = ctk.CTkFrame(self.center_hud, fg_color="transparent")
         self.custom_tools_frame.pack(anchor="n", fill="x", padx=30, pady=15)
 
@@ -409,12 +407,12 @@ class PySpotifyApp(ctk.CTk):
         self.btn_custom_color.pack(side="right", padx=5)
         self.apply_button_effects(self.btn_custom_color)
 
-        # Capa com cantos arredondados
+        
         self.cover_label = ctk.CTkLabel(self.center_hud, text="", width=300, height=300)
         self.cover_label.pack(pady=(10, 15))
         self.generate_default_cover()
 
-        # Títulos
+      
         self.label_eyebrow = ctk.CTkLabel(self.center_hud, text="", font=ctk.CTkFont(size=11, weight="bold"), text_color="#9a9a9a")
         self.label_eyebrow.pack(pady=(0, 2))
 
@@ -424,7 +422,7 @@ class PySpotifyApp(ctk.CTk):
         self.label_artist = ctk.CTkLabel(self.center_hud, text="Grazueiro Premium", font=ctk.CTkFont(size=15), text_color="#d3d3d3")
         self.label_artist.pack(pady=(0, 15))
 
-        # --- MONITOR DE ÁUDIO ESTÉREO (VU METER) ---
+        
         self.vu_frame = ctk.CTkFrame(self.center_hud, fg_color="transparent")
         self.vu_frame.pack(pady=(0, 15))
 
@@ -442,7 +440,7 @@ class PySpotifyApp(ctk.CTk):
         self.lbl_vu_right = ctk.CTkLabel(self.vu_frame, text="Direita", font=ctk.CTkFont(size=12, weight="bold"), text_color="#b3b3b3")
         self.lbl_vu_right.pack(side="left", padx=(5, 0))
 
-        # Barra de Progresso ATIVADA e INTERATIVA
+       
         self.timeline_frame = ctk.CTkFrame(self.center_hud, fg_color="transparent")
         self.timeline_frame.pack(fill="x", padx=120, pady=5)
 
@@ -459,7 +457,7 @@ class PySpotifyApp(ctk.CTk):
         self.label_time_max = ctk.CTkLabel(self.timeline_frame, text="00:00", font=ctk.CTkFont(size=12), text_color="#e0e0e0")
         self.label_time_max.pack(side="right")
 
-        # Controles Multimídia Inferiores
+        
         self.controls_wrapper = ctk.CTkFrame(self.center_hud, fg_color="transparent")
         self.controls_wrapper.pack(pady=15, fill="x", padx=120)
 
@@ -467,7 +465,7 @@ class PySpotifyApp(ctk.CTk):
         self.btn_repeat.pack(side="left", padx=6)
         self.apply_button_effects(self.btn_repeat)
 
-        # Botões de Processamento de Áudio Avançado
+     
         self.btn_8d = ctk.CTkButton(self.controls_wrapper, text="🎧 8D: Off", width=85, height=35, corner_radius=17, font=ctk.CTkFont(size=12), fg_color="#1c1c1c", hover_color="#2b2b2b", command=self.toggle_8d)
         self.btn_8d.pack(side="left", padx=6)
         self.apply_button_effects(self.btn_8d)
@@ -647,33 +645,32 @@ class PySpotifyApp(ctk.CTk):
                 except Exception:
                     pass
 
-            # --- CÓDIGO ATUALIZADO: ALTERAÇÃO DA BARRA DE TAREFAS E BARRAS DO WINDOWS 11 ---
             try:
                 import winreg
                 clean_hex = hex_color.lstrip('#')
                 r_t = int(clean_hex[0:2], 16)
                 g_t = int(clean_hex[2:4], 16)
                 b_t = int(clean_hex[4:6], 16)
-                # Formato DWORD nativo do Windows: 0xFFBBGGRR
+                
                 cor_dw = (0xFF << 24) | (b_t << 16) | (g_t << 8) | r_t
 
-                # 1. Atualiza no Gerenciador de Janelas do Windows (DWM) - Cor e Prevalência de bordas
+                
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\DWM", 0, winreg.KEY_SET_VALUE)
                 winreg.SetValueEx(key, "AccentColor", 0, winreg.REG_DWORD, cor_dw)
                 winreg.SetValueEx(key, "ColorPrevalence", 0, winreg.REG_DWORD, 1)
                 winreg.CloseKey(key)
 
-                # 2. Atualiza nas propriedades de Acentuação do Explorer (Menu Iniciar / Taskbar)
+                
                 key2 = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent", 0, winreg.KEY_SET_VALUE)
                 winreg.SetValueEx(key2, "AccentColorMenu", 0, winreg.REG_DWORD, cor_dw)
                 winreg.CloseKey(key2)
 
-                # 3. Força a ativação da opção de vinculação de cor nativa na Barra de Tarefas (Themes/Personalize)
+                
                 key3 = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", 0, winreg.KEY_SET_VALUE)
                 winreg.SetValueEx(key3, "ColorPrevalence", 0, winreg.REG_DWORD, 1)
                 winreg.CloseKey(key3)
 
-                # 4. Notifica o subsistema shell síncronamente sobre a mudança no conjunto imersivo
+                
                 ctypes.windll.user32.PostMessageW(0xFFFF, 0x001A, 0, 0)
                 ctypes.windll.user32.SendMessageTimeoutW(0xFFFF, 0x001A, 0, "ImmersiveColorSet", 2, 100, None)
             except Exception as e:
@@ -725,7 +722,7 @@ class PySpotifyApp(ctk.CTk):
         self.volume_slider.configure(button_color=accent_color)
         self.slider_8d_speed.configure(button_color=accent_color)
         
-        # Atualiza a cor do indicador Bluetooth dinamicamente de acordo com a música
+        
         if hasattr(self, 'lbl_bt_status') and self.bt_connected:
             self.lbl_bt_status.configure(text_color=accent_color)
 
