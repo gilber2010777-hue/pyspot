@@ -1,0 +1,209 @@
+@charset "UTF-8";
+
+@import url('https://fonts.googleapis.com/css2?family=Sedgwick+Ave+Display&display=swap');
+
+body#corpo {
+	background: url("imagens/fundo.jpg");
+}
+header#cabecalho {
+	border-bottom: solid 2px gray;
+}
+article#conteudo {
+	margin-left: 15px;
+	margin-right: 15px;
+}
+footer#rodape {
+	border-top: solid 2px gray;
+	text-align: center;
+}
+figure.outrasFotos {
+	background-color: lightgray;
+	text-align: center;
+	box-shadow: 0px 0px 20px #000000;
+	border-radius: 80px;
+}
+figure.foto1 {
+	background-color: lightblue;
+	box-shadow: 6px 6px 6px gray;
+	text-align: center;
+	border-radius: 10px;
+	border: solid 8px #000000;
+	width: 25%;
+	padding-top: 5px;
+	float: right;
+	transition: all 1.5s;
+}
+figure.foto1:hover {
+	transform: rotateZ(10deg);
+}
+figure.foto1 img {
+	width: 95%;
+	height: 150px;
+}
+figure.foto1 h4 {
+	margin-top: -4px;
+	margin-bottom: 0px;
+	background-color: yellow;
+}
+span.texto {
+	text-align: justify;
+	font-size: 16pt;
+	font-family: chilanka;
+	text-indent: 50px;
+}
+
+
+nav#menu h3 {
+	display: none;
+}
+nav#menu ol {
+	list-style: none;
+	text-transform: uppercase;
+	position: absolute;
+	top: 0px;
+	right: 60px;
+}
+nav#menu li {
+	display: inline-block;
+	background-color: lightgray;
+	padding: 10px;
+	margin: 3px;
+	border-radius: 10px;
+	transition: background-color 2s, transform 1s;
+}
+nav#menu li:hover {
+	background-color: darkgray;
+	transform: rotateZ(-15deg);
+}
+nav#menu a {
+	color: black;
+	text-decoration: none;
+}
+nav#menu a:hover {
+	color: white;
+	text-decoration: underline;
+}
+
+
+
+article#conteudo h1 {
+	background-color: #808080;
+	text-shadow: 2px 2px 2px #ffff00;
+	font-size: 25pt;
+	text-align: center;
+	transition: all 1s;
+}
+article#conteudo h1:hover {
+	letter-spacing: 30px;
+}
+
+
+
+header#cabecalho img.logo {
+	position: absolute;
+	top: 5px;
+	left: 3px;
+}
+hgroup.titulos h1 {
+	text-transform: uppercase;
+	font-size: 30pt;
+	letter-spacing: -20px;
+	width: 45%;
+	border-radius: 20px;
+	transition: all 2s;
+}
+hgroup.titulos h1:hover {
+	letter-spacing: 6px;
+	background-color: blue;
+	margin-left: 9px;
+	color: white;
+	box-shadow: 6px 6px 6px gray;
+}
+
+
+
+header#cabecalho img.icone {
+	position: absolute;
+	top: 70px;
+	right: 80px;
+}
+
+/*Formatação da tabela de produtos*/
+
+table.tabela-produtos {
+	border-collapse: collapse;
+	width: 90%;
+	margin: 20px auto;
+}
+table.tabela-produtos th, table.tabela-produtos td {
+	border: 1px solid gray;
+	padding: 10px;
+	text-align: center;
+}
+table.tabela-produtos th {
+	background-color: lightgray;
+	text-transform: uppercase;
+}
+table.tabela-produtos img {
+	width: 100px;
+	height: 100px;
+	object-fit: contain;
+}
+table.tabela-produtos tr:not(:first-child) {
+	transition: background-color 0.3s, color 0.3s, transform 0.3s;
+}
+table.tabela-produtos tr:not(:first-child):hover {
+	background-color: black;
+	color: white;
+	transform: translateY(-5px);
+}
+
+/*Formatação dos vídeos no canto*/
+
+div.videos-canto {
+	position: fixed;
+	bottom: 20px;
+	right: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	z-index: 999;
+}
+div.videos-canto iframe {
+	width: 280px;
+	height: 158px;
+	border-radius: 10px;
+	box-shadow: 4px 4px 10px gray;
+}
+
+/*formatação de videos de serviços*/
+
+span.texto h3 {
+	font-size: 20pt;
+	font-family: 'Sedgwick ave display', cursive;
+	text-align: center;
+	color: darkblue;
+}
+span.texto:has(div.div-principal) p {
+	font-size: 20px;
+	font-family: 'Sedgwick ave display', cursive;
+}
+div.div-principal {
+	width: 100%;
+	display: flex;
+	border: solid darkblue 5px;
+	gap: 15px;
+	background-color: rgb(140, 213, 238);
+}
+div.div-principal div {
+	flex: 1;
+}
+div.div-principal iframe {
+	width: 100%;
+	border-radius: 30px;
+}
+div.divsec {
+	border-right: darkblue solid 5px;
+	border-left: darkblue solid 5px;
+	padding: 14px;
+}
