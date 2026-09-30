@@ -1,0 +1,525 @@
+local UIS = game:GetService("UserInputService")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local HapticService = game:GetService("HapticService")
+local ContentProvider = game:GetService("ContentProvider")
+
+local player = game.Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local animator = humanoid:WaitForChild("Animator")
+
+local DanoZumbiEvent = ReplicatedStorage:WaitForChild("DanoZumbi")
+local ConfigurarGrip = ReplicatedStorage:WaitForChild("ConfigurarGrip ACS-12")
+local ParticulasTiroEvent = ReplicatedStorage:WaitForChild("ParticulasTiro")
+local InclinacaoBracoEvent = ReplicatedStorage:WaitForChild("InclinacaoBraco ACS-12")
+local SomArmaEvent = ReplicatedStorage:WaitForChild("SomArmaEvent")
+
+local tool = script.Parent
+local animFolder = tool:WaitForChild("Animations")
+local handle = tool:WaitForChild("Handle")
+local balaTemplate = tool:WaitForChild("BALA")
+local canoArma = nil
+
+local IMPACTO_VISUAL = {
+	IntensidadeZoom = 4,      
+	VelocidadeRetorno = 0.15, 
+	TamanhoImpacto = 0.4,     
+}
+
+local LIMITES = {
+	MaxSubir = 90,
+	MaxDescer = 90,
+	Suavidade = 1,
+	LimitarCamera = true
+}
+
+local originalFOV = camera.FieldOfView
+
+local originalRightC0, originalLeftC0, originalNeckC0 = nil, nil, nil
+local posicoesSalvas = false 
+
+local thetaAtivo = 0
+local VELOCIDADE_TRANSICAO_RECARGA = 8
+local VELOCIDADE_RETORNO_MIRA = 12
+local isTransicaoRecarga = false
+local podeAtirar = false
+
+local mouseDestrancado = false
+
+for _, obj in ipairs(tool:GetChildren()) do
+	if (obj.Name == "Cylinder.004" or obj.Name == "Cylinder") and obj:IsA("BasePart") then
+		canoArma = obj
+		break
+	end
+end
+
+local EfeitosParticulas = require(ReplicatedStorage:WaitForChild("EfeitosParticulas"))
+local AmmoUIManager = require(ReplicatedStorage:WaitForChild("AmmoUIManager"))
+local particleEmitters, beamsEfeito = nil, nil
+local animIdle = animFolder:WaitForChild("Animation")
+local animShoot = animFolder:WaitForChild("Animation1")
+local animReload = animFolder:WaitForChild("Animation3")
+local animEquip = animFolder:WaitForChild("Animation4")
+
+task.spawn(function()
+	pcall(function()
+		ContentProvider:PreloadAsync({tool, animIdle, animShoot, animReload, animEquip})
+	end)
+end)
+
+local idleTrack, shootTrack, reloadTrack, equipTrack
+local isEquipped = false
+local isMouseDown = false
+local ammo = 20         
+local maxAmmo = 20        
+local fireRate = 0.12
+local isReloading = false 
+local reloadTime = 2.5
+local reserveAmmo = 80
+local maxReserveAmmo = 80    
+
+local rightShoulder, leftShoulder, neck = nil, nil, nil
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local conexaoPernas = nil
+local function iniciarTravaPernas()
+	if conexaoPernas then conexaoPernas:Disconnect() end
+end
+
+local function pararTravaPernas()
+	if conexaoPernas then
+		conexaoPernas:Disconnect()
+		conexaoPernas = nil
+	end
+end
+
+local function setupTrack(animObject, priority, isLoop)
+	if not animator then return end 
+	local track = animator:LoadAnimation(animObject)
+	track.Priority = priority
+	track.Looped = isLoop
+	return track
+end
+
+local function stopAllTracks()
+	if idleTrack then pcall(function() idleTrack:Stop(0) end) end
+	if shootTrack then pcall(function() shootTrack:Stop(0) end) end
+	if reloadTrack then pcall(function() reloadTrack:Stop(0) end) end
+	if equipTrack then pcall(function() equipTrack:Stop(0) end) end
+end
+
+local function destroyAllTracks()
+	if idleTrack then pcall(function() idleTrack:Destroy() end) end
+	if shootTrack then pcall(function() shootTrack:Destroy() end) end
+	if reloadTrack then pcall(function() reloadTrack:Destroy() end) end
+	if equipTrack then pcall(function() equipTrack:Destroy() end) end
+	idleTrack = nil
+	shootTrack = nil
+	reloadTrack = nil
+	equipTrack = nil
+end
+
+local function loadAnims()
+	stopAllTracks()
+	if not idleTrack then idleTrack = setupTrack(animIdle, Enum.AnimationPriority.Movement, true) end
+	if not shootTrack then shootTrack = setupTrack(animShoot, Enum.AnimationPriority.Action, false) end
+	if not reloadTrack then reloadTrack = setupTrack(animReload, Enum.AnimationPriority.Action, false) end
+	if not equipTrack then equipTrack = setupTrack(animEquip, Enum.AnimationPriority.Action, false) end
+end
+
+local updateConnection = nil
+
+
+local function limparConexoesEArma()
+	AmmoUIManager.hideAmmoUI()
+	isEquipped = false
+	podeAtirar = false
+	isMouseDown = false
+	mouseDestrancado = false
+	UIS.MouseBehavior = Enum.MouseBehavior.Default
+
+	if isReloading then
+		ammo = 0
+		isReloading = false
+	end
+	isTransicaoRecarga = false
+	camera.FieldOfView = originalFOV 
+
+	if updateConnection then 
+		updateConnection:Disconnect() 
+		updateConnection = nil
+	end
+
+	pcall(function()
+		InclinacaoBracoEvent:FireServer(0)
+	end)
+
+	if rightShoulder and originalRightC0 then rightShoulder.C0 = originalRightC0 end
+	if leftShoulder and originalLeftC0 then leftShoulder.C0 = originalLeftC0 end
+	if neck and originalNeckC0 then neck.C0 = originalNeckC0 end
+
+	stopAllTracks()
+	pararTravaPernas() 
+end
+
+local function solicitarMotor6D()
+	local meuC0 = CFrame.new(-0.681, -0.68, -0.343) * CFrame.Angles(math.rad(0), 0, 0)
+	local meuC1 = CFrame.new(0, 0, 0)
+
+	local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand")
+	if rightArm then
+		local grip = rightArm:FindFirstChild("RightGrip")
+		if grip then grip:Destroy() end
+
+		local m6d = rightArm:FindFirstChild("ToolGrip6D") or Instance.new("Motor6D")
+		m6d.Name = "ToolGrip6D"
+		m6d.Part0 = rightArm
+		m6d.Part1 = handle
+		m6d.C0 = meuC0
+		m6d.C1 = meuC1
+		m6d.Parent = rightArm
+	end
+
+	ConfigurarGrip:FireServer(tool, handle)
+
+	local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+	if torso then
+		rightShoulder = torso:FindFirstChild("Right Shoulder") or (character:FindFirstChild("RightUpperArm") and character.RightUpperArm:FindFirstChild("RightShoulder"))
+		leftShoulder = torso:FindFirstChild("Left Shoulder") or (character:FindFirstChild("LeftUpperArm") and character.LeftUpperArm:FindFirstChild("LeftShoulder"))
+	end
+
+	local head = character:FindFirstChild("Head")
+	if head then
+		neck = head:FindFirstChild("Neck") or (torso and torso:FindFirstChild("Neck"))
+	end
+
+	if not posicoesSalvas then
+		if rightShoulder then originalRightC0 = rightShoulder.C0 end
+		if leftShoulder then originalLeftC0 = leftShoulder.C0 end
+		if neck then originalNeckC0 = neck.C0 end
+		posicoesSalvas = true
+	end
+
+	if isEquipped and character and humanoid.Health > 0 then
+		local cameraCFrame = camera.CFrame
+		local theta = math.asin(cameraCFrame.LookVector.Y)
+		local minRad = math.rad(-LIMITES.MaxDescer)
+		local maxRad = math.rad(LIMITES.MaxSubir)
+		thetaAtivo = math.clamp(theta, minRad, maxRad)
+	end
+
+	if updateConnection then updateConnection:Disconnect() end
+	updateConnection = RunService.RenderStepped:Connect(function(dt)
+		if not isEquipped or not character or humanoid.Health <= 0 then
+			if updateConnection then
+				updateConnection:Disconnect()
+				updateConnection = nil
+			end
+			return
+		end
+
+		if mouseDestrancado then
+			UIS.MouseBehavior = Enum.MouseBehavior.Default
+		else
+			UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
+		end
+
+		camera.FieldOfView = math.lerp(camera.FieldOfView, originalFOV, IMPACTO_VISUAL.VelocidadeRetorno)
+
+		local rightArm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand")
+		if rightArm then
+			local m = rightArm:FindFirstChild("ToolGrip6D")
+			if m then
+				m.C0 = meuC0
+				m.C1 = meuC1
+			end
+		end
+
+		local cameraCFrame = camera.CFrame
+		local theta = math.asin(cameraCFrame.LookVector.Y)
+		local minRad = math.rad(-LIMITES.MaxDescer)
+		local maxRad = math.rad(LIMITES.MaxSubir)
+		local thetaLimitado = math.clamp(theta, minRad, maxRad)
+
+		if LIMITES.LimitarCamera then
+			local yaw = math.atan2(-cameraCFrame.LookVector.X, -cameraCFrame.LookVector.Z)
+			if theta > maxRad then
+				camera.CFrame = CFrame.new(cameraCFrame.Position) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(maxRad, 0, 0)
+			elseif theta < minRad then
+				camera.CFrame = CFrame.new(cameraCFrame.Position) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(minRad, 0, 0)
+			end
+		end
+
+		local thetaFinal = thetaLimitado
+
+		if isReloading or isTransicaoRecarga then
+			if isReloading and not isTransicaoRecarga then
+				isTransicaoRecarga = true
+			end
+
+			local thetaAlvo = isReloading and 0 or thetaLimitado
+			local velocidade = isReloading and VELOCIDADE_TRANSICAO_RECARGA or VELOCIDADE_RETORNO_MIRA
+			local fatorLerp = 1 - math.exp(-velocidade * dt)
+			thetaAtivo = thetaAtivo + (thetaAlvo - thetaAtivo) * fatorLerp
+
+			if not isReloading and math.abs(thetaAtivo - thetaLimitado) < 0.005 then
+				isTransicaoRecarga = false
+				thetaAtivo = thetaLimitado
+			end
+
+			thetaFinal = thetaAtivo
+		else
+			thetaAtivo = thetaLimitado
+		end
+
+		InclinacaoBracoEvent:FireServer(thetaFinal)
+
+		if humanoid.RigType == Enum.HumanoidRigType.R6 then
+			if rightShoulder and originalRightC0 then
+				rightShoulder.C0 = rightShoulder.C0:Lerp(originalRightC0 * CFrame.Angles(0, 0, thetaFinal), LIMITES.Suavidade)
+			end
+			if leftShoulder and originalLeftC0 then
+				leftShoulder.C0 = leftShoulder.C0:Lerp(originalLeftC0 * CFrame.Angles(0, 0, -thetaFinal), LIMITES.Suavidade)
+			end
+			if neck and originalNeckC0 then
+				neck.C0 = neck.C0:Lerp(originalNeckC0 * CFrame.Angles(-thetaFinal, 0, 0), LIMITES.Suavidade)
+			end
+		else
+			if rightShoulder and originalRightC0 then
+				rightShoulder.C0 = rightShoulder.C0:Lerp(originalRightC0 * CFrame.Angles(-thetaFinal, 0, 0), LIMITES.Suavidade)
+			end
+			if leftShoulder and originalLeftC0 then
+				leftShoulder.C0 = leftShoulder.C0:Lerp(originalLeftC0 * CFrame.Angles(-thetaFinal, 0, 0), LIMITES.Suavidade)
+			end
+			if neck and originalNeckC0 then
+				neck.C0 = neck.C0:Lerp(originalNeckC0 * CFrame.Angles(-thetaFinal, 0, 0), LIMITES.Suavidade)
+			end
+		end
+	end)
+end
+
+local function atirar()
+	if not podeAtirar or ammo <= 0 or isReloading or mouseDestrancado or not isEquipped then if ammo <= 0 then pcall(function() AmmoUIManager.shakeAmmoUI() end) end return end
+	ammo -= 1
+	pcall(function() AmmoUIManager.updateAmmoUI(ammo, maxAmmo, reserveAmmo, maxReserveAmmo) end)
+	if shootTrack then shootTrack:Play() end
+
+	local pontoSaida = canoArma or handle
+
+	if _G.TirarComDelayZero then
+		_G.TirarComDelayZero(pontoSaida.Position, tool.Name)
+	end
+
+	SomArmaEvent:FireServer("Tiro", tool.Name, pontoSaida.Position)
+	camera.FieldOfView = originalFOV - IMPACTO_VISUAL.IntensidadeZoom
+
+	local origem = pontoSaida.Position
+	local direcao = camera.CFrame.LookVector 
+	local alcanceMaximo = 1000
+	local destino = origem + (direcao * alcanceMaximo)
+
+	local novaBala = balaTemplate:Clone()
+	novaBala.Parent = workspace
+	novaBala.CFrame = CFrame.lookAt(origem, origem + direcao)
+	novaBala.CanCollide = false
+	novaBala.Velocity = direcao * 400
+	Debris:AddItem(novaBala, 1.5)
+
+	rayParams.FilterDescendantsInstances = {character, tool, novaBala}
+
+	local resultado = workspace:Spherecast(origem, 0.6, direcao * alcanceMaximo, rayParams)
+
+	if resultado and resultado.Instance then
+		local hit = resultado.Instance
+		destino = resultado.Position
+
+		if not (hit.Name:lower():find("beam") or hit.Name:lower():find("light") or hit.Transparency > 0.8) then
+			local model = hit:FindFirstAncestorOfClass("Model")
+			if model and model:FindFirstChild("Humanoid") then
+				local nomeParte = hit.Name
+				local dano = 45
+				if nomeParte == "Head" then dano = 100 elseif nomeParte == "Torso" then dano = 65 end
+				DanoZumbiEvent:FireServer(model, nomeParte, resultado.Position, dano)
+			end
+			novaBala.Position = resultado.Position
+			novaBala.Velocity = Vector3.zero
+			Debris:AddItem(novaBala, 0.05)
+		end
+	end
+
+	local direcaoArma
+	local distanciaVisual = (destino - pontoSaida.Position).Magnitude
+
+	if distanciaVisual > 0.5 then
+		direcaoArma = CFrame.lookAt(pontoSaida.Position, destino)
+	else
+		direcaoArma = CFrame.lookAt(pontoSaida.Position, pontoSaida.Position + direcao)
+	end
+
+	EfeitosParticulas.Disparar(particleEmitters, beamsEfeito, destino, direcaoArma)
+	ParticulasTiroEvent:FireServer(tool.Name, destino, direcaoArma)
+end
+
+local function recarregar()
+	if isReloading or not isEquipped then return end
+	if ammo >= maxAmmo then return end
+	if reserveAmmo <= 0 then return end    
+	isReloading = true
+	isMouseDown = false
+
+	pcall(function()
+		if HapticService:IsVibrationSupported(Enum.UserInputType.Gamepad1) then
+			HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.Small, 0.7)
+			task.delay(0.2, function()
+				HapticService:SetMotor(Enum.UserInputType.Gamepad1, Enum.VibrationMotor.Small, 0)
+			end)
+		end
+	end)
+
+	SomArmaEvent:FireServer("Recarregar", tool.Name, handle.Position)
+
+	if reloadTrack then
+		reloadTrack:Play()
+		reloadTrack.Ended:Wait()
+		reloadTrack:Stop(0.2)
+	else
+		task.wait(reloadTime) 
+	end
+	if not isEquipped then return end
+	local needed = maxAmmo - ammo
+	local toTake = math.min(needed, reserveAmmo)
+	ammo = ammo + toTake
+	reserveAmmo = reserveAmmo - toTake
+	isReloading = false
+	pcall(function() AmmoUIManager.reloadAmmoUI(ammo, maxAmmo, reserveAmmo, maxReserveAmmo) end)
+	if idleTrack and isEquipped then
+		idleTrack:AdjustWeight(1, 0.2)  
+	end
+end
+
+local tiroAtivo = false
+
+local function loopTiro()
+	if tiroAtivo then return end
+	tiroAtivo = true
+	while isMouseDown and isEquipped and ammo > 0 and not isReloading and not mouseDestrancado do
+		atirar()
+		local waitedUntil = tick() + fireRate
+		repeat 
+			task.wait(0.03) 
+		until tick() >= waitedUntil or not isMouseDown or not isEquipped
+
+		if not isMouseDown or mouseDestrancado or not isEquipped then break end
+	end
+	tiroAtivo = false
+	if ammo <= 0 and not isReloading and isEquipped and not mouseDestrancado then
+		recarregar()
+	end
+end
+
+
+UIS.InputBegan:Connect(function(input, gpe)
+	if gpe or not isEquipped then return end
+
+	if input.KeyCode == Enum.KeyCode.P or input.KeyCode == Enum.KeyCode.ButtonY then
+		mouseDestrancado = not mouseDestrancado
+		if mouseDestrancado then
+			isMouseDown = false 
+			UIS.MouseBehavior = Enum.MouseBehavior.Default
+		else
+			UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
+		end
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.R or input.KeyCode == Enum.KeyCode.ButtonB then
+		if mouseDestrancado then return end 
+		recarregar()
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == Enum.KeyCode.ButtonR2 or input.UserInputType == Enum.UserInputType.Touch then
+		if isReloading then
+			if not mouseDestrancado then
+				pcall(function() AmmoUIManager.shakeAmmoUI(false) end)
+			end
+			return
+		end
+		if mouseDestrancado then return end
+		isMouseDown = true
+		if ammo <= 0 then
+			if reserveAmmo <= 0 then
+				pcall(function() AmmoUIManager.shakeAmmoUI(true) end)
+			else
+				pcall(function() AmmoUIManager.shakeAmmoUI(false) end)
+			end
+		end
+		task.spawn(loopTiro)
+	end
+end)
+
+UIS.InputEnded:Connect(function(input, gpe)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.KeyCode == Enum.KeyCode.ButtonR2 or input.UserInputType == Enum.UserInputType.Touch then
+		isMouseDown = false
+	end
+end)
+
+tool.Equipped:Connect(function()
+	podeAtirar = false 
+	mouseDestrancado = false
+	character = player.Character or player.CharacterAdded:Wait()
+	humanoid = character:WaitForChild("Humanoid")
+	animator = humanoid:WaitForChild("Animator")
+	originalFOV = camera.FieldOfView 
+	isEquipped = true
+	isReloading = false
+	isTransicaoRecarga = false
+	task.spawn(function() AmmoUIManager.showAmmoUI(ammo, maxAmmo, reserveAmmo, maxReserveAmmo, function() return isEquipped end) end)
+
+	for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+		track:Stop(0)
+	end
+
+	loadAnims()
+	solicitarMotor6D()
+	iniciarTravaPernas() 
+	particleEmitters, beamsEfeito = EfeitosParticulas.Inicializar(tool)
+
+	if idleTrack then idleTrack:Play(0) end
+	if equipTrack then
+		equipTrack:Play()
+		task.spawn(function()
+			equipTrack.Ended:Wait()
+			if isEquipped then
+				podeAtirar = true
+				if ammo <= 0 and not isReloading then
+					recarregar()
+				end
+			end
+		end)
+	else
+		task.wait(0.05)
+		if isEquipped then
+			podeAtirar = true
+			if ammo <= 0 and not isReloading then
+				task.spawn(recarregar)
+			end
+		end
+	end
+end)
+
+tool.Unequipped:Connect(function()
+	limparConexoesEArma()
+end)
+
+humanoid.Died:Connect(function()
+	thetaAtivo = 0
+	posicoesSalvas = false
+	limparConexoesEArma()
+end)
